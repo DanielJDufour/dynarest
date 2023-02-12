@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "Lightweight Restful API for DynamoDB",
   "main": "dynarest.js",
+  "files": [
+    "dynarest.js"
+  ],
   "scripts": {
     "format": "npx prettier --arrow-parens=avoid --print-width=160 --trailing-comma=none --write *.js",
     "start": "cd local && java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -inMemory -sharedDb -port 9000",
