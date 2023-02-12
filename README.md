@@ -6,6 +6,44 @@ Lightweight Restful API for DynamoDB
 npm install -S dynarest
 ```
 
+## Routes
+The following routes are made available when calling `register`.  
+See an example below.
+| method | route | example | description |
+| ------ | ----- | ---- | ----- |
+| GET | /prefix/table | /api/cars | gets an array of all the rows |
+| GET | /prefix/table/key | /api/cars/1234 | get a row by primary key |
+| PUT | /prefix/table | /api/cars | add a row and return it |
+| DELETE | /prefix/table | /api/cars | delete all rows |
+| DELETE | /prefix/table/key | /api/cars/key | delete row by primary key |
+
+## Routing
+```js
+const express = require("express");
+const { register } = require("./dynarest.js");
+
+const app = express();
+
+// add json support to express app
+app.use(express.json());
+
+// register dynarest routes with the express app
+await register(app, {
+  debug: false, // set to true for informational logging
+  endpoint: 'http://localhost:9000', // useful if running DynamoDB locally
+  key: "uuid", // Primary Hash Key for the DynamoDB Table
+  local: false, // Optional, running DynamoDB locally
+  prefix: 'api', // prefix to add before each route
+  region: "us-east-1",
+  schema, // Ajv Schema for items in DynamoDB table, see https://ajv.js.org/
+  table: 'cars', // the name of the database table (will be created if missing)
+  timestamp: true, // add a timestamp attribute to each item when created
+  uuid: true // add a uuid attribute to each item when created
+});
+```
+
+
+## Dynarest Client
 ```js
 import { Dynarest } from "dynarest";
 

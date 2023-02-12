@@ -1,3 +1,5 @@
+const crypto = require("node:crypto");
+
 const AWS = require("aws-sdk");
 const Ajv = require("ajv");
 
@@ -29,7 +31,10 @@ class Dynarest {
   }
 
   static async init({ accessKeyId, debug, endpoint, key, region, secretAccessKey, schema, table, translateConfig }) {
-    if (debug) console.log("[dynarest] initializing");
+    if (debug) {
+      console.log("[dynarest] initializing with:");
+      console.dir(arguments[0], { depth: 10 });
+    }
 
     if (!table) throw Error("[dynarest] table missing");
 
@@ -39,13 +44,16 @@ class Dynarest {
       region,
       secretAccessKey
     });
+    if (debug) console.log("[dynarest] base_client:", typeof base_client);
 
     const client = new DynamoDBClient({
       endpoint,
       region
     });
+    if (debug) console.log("[dynarest] client:", typeof client);
 
     const document_client = DynamoDBDocumentClient.from(client, translateConfig);
+    if (debug) console.log("[dynarest] document_client:", typeof document_client);
 
     // get attribute definitions from schema
     const attribute_definitions = Object.entries(schema.properties)
@@ -54,12 +62,23 @@ class Dynarest {
         AttributeName: name,
         AttributeType: AJV_TYPE_TO_KEY_TYPE[type] || "S"
       }));
+    if (debug) console.log("[dynarest] attribute_definitions:", attribute_definitions);
 
     const tables = await new Promise((resolve, reject) => {
-      base_client.listTables({}, (err, data) => (err ? reject(err) : resolve(data.TableNames)));
+      base_client.listTables({}, (err, data) => {
+        if (debug) console.log("[dynarest] listTables:", { err, data });
+        if (err) {
+          console.error("failed to list tables");
+          reject(err);
+        } else {
+          resolve(data.TableNames);
+        }
+      });
     });
+    if (debug) console.log("[dynarest] tables:", tables);
 
     if (!tables.includes(table)) {
+      if (debug) console.log("[dynarest] creating table");
       await new Promise((resolve, reject) => {
         base_client.createTable(
           {
@@ -109,6 +128,7 @@ class Dynarest {
         })
       );
     } else {
+      if (this.debug) console.log("[dynarest] deleteing all items from table one-by-one");
       const items = await this.get();
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
@@ -138,6 +158,7 @@ class Dynarest {
       );
       return [item];
     } else {
+      if (this.debug) console.log("sending scan command");
       const { Items: items } = await this.document_client.send(
         new ScanCommand({
           TableName: this.table
@@ -176,4 +197,152 @@ class Dynarest {
   }
 }
 
-module.exports = { Dynarest };
+function register(
+  app,
+  {
+    accessKeyId = process.env.AWS_ACCESS_KEY_ID,
+    debug = false,
+    endpoint = process.env.DYNAREST_ENDPOINT,
+    local = false,
+    key,
+    prefix = `/api`,
+    region = process.env.AWS_REGION,
+    secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY,
+    schema,
+    table = process.env.DYNAREST_TABLE_NAME,
+    timestamp = false,
+    uuid = false
+  }
+) {
+  if (debug) {
+    console.log("[dynarest] starting register with options:");
+    console.dir(arguments[1], { depth: 10 });
+  }
+  if (!key) throw new Error("[dynarest] missing key");
+  if (!schema) throw new Error("[dynarest] missing schema");
+
+  // if running locally,
+  // these settings are ignored,
+  // but still have to be provided
+  if (local) {
+    accessKeyId ??= "ACCESS_KEY_ID";
+    region ??= "us-east-1";
+    secretAccessKey ??= "SECRET_ACCESS_KE";
+    table ??= "DYNAREST_TABLE";
+  }
+
+  const dynarest = Dynarest.init({
+    accessKeyId,
+    debug,
+    endpoint,
+    key,
+    region,
+    secretAccessKey,
+    schema,
+    table
+  });
+
+  const routes = [
+    {
+      method: "delete",
+      path: [`${prefix}/${table}`, `${prefix}/${table}/`, `${prefix}/${table}/:key`],
+      handler: async (req, res) => {
+        try {
+          const client = await dynarest;
+
+          const { key } = req.params;
+
+          await client.delete(key);
+
+          return res.status(200).send();
+        } catch (error) {
+          console.error(error);
+          return res.status(500).json(process.env.mode === "development" ? JSON.stringify({ msg: err.message }) : "error");
+        }
+      }
+    },
+    {
+      method: "get",
+      path: `${prefix}/${table}`,
+      handler: async (req, res) => {
+        try {
+          if (debug) console.log("[dynarest] recv'd get request");
+
+          const client = await dynarest;
+          if (debug) console.log("client:", client);
+
+          const items = await client.get();
+          if (debug) console.log("[dynarest] client.get() returned:", items);
+
+          if (req.query.sort) {
+            let { sort: sort_key } = req.query;
+            if (debug) console.log("[dynarest] sort:", sort_key);
+            if (sort_key.startsWith("-")) {
+              sort_key = sort_key.substring(1); // remove -
+              items.sort((a, b) => (Number(a[sort_key]) > Number(b[sort_key]) ? -1 : 1));
+            } else {
+              items.sort((a, b) => (Number(a[sort_key]) > Number(b[sort_key]) ? 1 : -1));
+            }
+          }
+
+          return res.status(200).json(items);
+        } catch (error) {
+          console.log(error);
+          return res.status(500).json({ error: "Could not retreive appointment check-ins" });
+        }
+      }
+    },
+    {
+      method: "get",
+      path: `${prefix}/${table}/:key`,
+      handler: async (req, res) => {
+        try {
+          if (debug) console.log("[dynarest] recv'd get request");
+
+          const client = await dynarest;
+          if (debug) console.log("client:", client);
+
+          const { key } = req.params;
+          if (debug) console.log("key:", key);
+
+          const [item] = await client.get(key);
+          if (debug) console.log("[dynarest] item:", item);
+
+          return res.status(200).json(item);
+        } catch (error) {
+          console.log(error);
+          return res.status(500).json({ error: "Could not retreive appointment check-ins" });
+        }
+      }
+    },
+    {
+      method: "put",
+      path: `${prefix}/${table}`,
+      handler: async function (req, res) {
+        try {
+          const client = await dynarest;
+
+          const item = { ...req.body };
+          if (uuid) item.uuid = crypto.randomUUID();
+          if (timestamp) item.timestamp = new Date().getTime();
+
+          await client.put(item);
+
+          return res.status(200).json(item);
+        } catch (error) {
+          console.log("[dynarest] error:", error);
+          return res.status(500).json({ error: "put failed" });
+        }
+      }
+    }
+  ];
+
+  routes.forEach(({ method, path, handler }) => {
+    app[method](path, handler);
+  });
+}
+
+module.exports = {
+  Dynarest,
+  register
+};
