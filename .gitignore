@@ -105,3 +105,6 @@ dist
 
 # DynamoDB Local
 local/
+
+# Lock files
+pnpm-lock.yaml

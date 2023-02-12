@@ -2,9 +2,10 @@
   "name": "dynarest",
   "version": "0.0.0",
   "description": "Lightweight Restful API for DynamoDB",
-  "main": "index.js",
+  "main": "dynarest.js",
   "scripts": {
-    "dynamodb": "java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -inMemory -sharedDb -port 9000",
+    "format": "npx prettier --arrow-parens=avoid --print-width=160 --trailing-comma=none --write *.js",
+    "start": "cd local && java -Djava.library.path=./DynamoDBLocal_lib -jar DynamoDBLocal.jar -inMemory -sharedDb -port 9000",
     "setup": "cd local && ./setup.sh",
     "test": "node test.js"
   },
@@ -23,5 +24,14 @@
   "bugs": {
     "url": "https://github.com/DanielJDufour/dynarest/issues"
   },
-  "homepage": "https://github.com/DanielJDufour/dynarest#readme"
+  "homepage": "https://github.com/DanielJDufour/dynarest#readme",
+  "devDependencies": {
+    "aws-sdk": "^2.1313.0",
+    "flug": "^2.4.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.267.0",
+    "@aws-sdk/lib-dynamodb": "^3.267.0",
+    "ajv": "^8.12.0"
+  }
 }
