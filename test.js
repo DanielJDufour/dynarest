@@ -30,6 +30,7 @@ const b = {
 
 test("class", async ({ eq }) => {
   const dyna = await Dynarest.init({
+    autoCreate: true,
     debug: false,
     endpoint: ENDPOINT,
     key: "uuid",
@@ -61,6 +62,7 @@ test("express", async ({ eq }) => {
   app.use(express.json());
 
   await register(app, {
+    autoCreate: true,
     debug: false,
     endpoint: ENDPOINT,
     key: "uuid",
