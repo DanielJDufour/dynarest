@@ -12,25 +12,29 @@ const AJV_TYPE_TO_KEY_TYPE = {
   number: "N"
 };
 
+const uniq = arr => Array.from(new Set(arr)).sort();
+
 class Dynarest {
   ajv = null;
   client = null;
   schema = null;
   table = null;
 
-  constructor({ accessKeyId, ajv, base_client, client, document_client, endpoint, key, region, schema, secretAccessKey, table }) {
+  constructor({ accessKeyId, ajv, base_client, client, debug, document_client, endpoint, key, region, schema, secretAccessKey, table }) {
     this.ajv = ajv;
     this.base_client = base_client;
     this.client = client;
+    this.debug = debug;
     this.document_client = document_client;
     this.endpoint = endpoint;
     this.key = key;
     this.region = region;
     this.schema = schema;
     this.table = table;
+    if (debug) console.log("[dynarest] finished constructor");
   }
 
-  static async init({ accessKeyId, debug, endpoint, key, region, secretAccessKey, schema, table, translateConfig }) {
+  static async init({ accessKeyId, autoCreate = false, debug, endpoint, key, region, secretAccessKey, sessionToken, schema, table, translateConfig }) {
     if (debug) {
       console.log("[dynarest] initializing with:");
       console.dir(arguments[0], { depth: 10 });
@@ -42,7 +46,8 @@ class Dynarest {
       accessKeyId,
       endpoint,
       region,
-      secretAccessKey
+      secretAccessKey,
+      sessionToken
     });
     if (debug) console.log("[dynarest] base_client:", typeof base_client);
 
@@ -64,40 +69,42 @@ class Dynarest {
       }));
     if (debug) console.log("[dynarest] attribute_definitions:", attribute_definitions);
 
-    const tables = await new Promise((resolve, reject) => {
-      base_client.listTables({}, (err, data) => {
-        if (debug) console.log("[dynarest] listTables:", { err, data });
-        if (err) {
-          console.error("failed to list tables");
-          reject(err);
-        } else {
-          resolve(data.TableNames);
-        }
+    if (autoCreate) {
+      const tables = await new Promise((resolve, reject) => {
+        base_client.listTables({}, (err, data) => {
+          if (debug) console.log("[dynarest] listTables:", { err, data });
+          if (err) {
+            console.error("failed to list tables");
+            reject(err);
+          } else {
+            resolve(data.TableNames);
+          }
+        });
       });
-    });
-    if (debug) console.log("[dynarest] tables:", tables);
+      if (debug) console.log("[dynarest] tables:", tables);
 
-    if (!tables.includes(table)) {
-      if (debug) console.log("[dynarest] creating table");
-      await new Promise((resolve, reject) => {
-        base_client.createTable(
-          {
-            AttributeDefinitions: [
-              {
-                AttributeName: key,
-                AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
-              }
-            ],
-            KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
-            ProvisionedThroughput: {
-              ReadCapacityUnits: 5,
-              WriteCapacityUnits: 5
+      if (!tables.includes(table)) {
+        if (debug) console.log("[dynarest] creating table");
+        await new Promise((resolve, reject) => {
+          base_client.createTable(
+            {
+              AttributeDefinitions: [
+                {
+                  AttributeName: key,
+                  AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
+                }
+              ],
+              KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
+              ProvisionedThroughput: {
+                ReadCapacityUnits: 5,
+                WriteCapacityUnits: 5
+              },
+              TableName: table
             },
-            TableName: table
-          },
-          (err, data) => (err ? reject(err) : resolve(data))
-        );
-      });
+            (err, data) => (err ? reject(err) : resolve(data))
+          );
+        });
+      }
     }
 
     return new Dynarest({
@@ -105,6 +112,7 @@ class Dynarest {
       attribute_definitions,
       base_client,
       client,
+      debug,
       document_client,
       key,
       schema,
@@ -114,6 +122,7 @@ class Dynarest {
 
   async check(obj) {
     const [valid, errors] = this.validate(obj);
+    if (this.debug) console.error(errors);
     if (!valid) throw Error("[dynarest] invalid object", { cause: errors });
   }
 
@@ -201,6 +210,7 @@ function register(
   app,
   {
     accessKeyId = process.env.AWS_ACCESS_KEY_ID,
+    autoCreate = false,
     debug = false,
     endpoint = process.env.DYNAREST_ENDPOINT,
     local = false,
@@ -208,6 +218,7 @@ function register(
     prefix = `/api`,
     region = process.env.AWS_REGION,
     secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken = process.env.AWS_SESSION_TOKEN,
     schema,
     table = process.env.DYNAREST_TABLE_NAME,
     timestamp = false,
@@ -220,6 +231,9 @@ function register(
   }
   if (!key) throw new Error("[dynarest] missing key");
   if (!schema) throw new Error("[dynarest] missing schema");
+  if (typeof prefix === "string" && prefix.length > 0 && !prefix.startsWith("/")) {
+    prefix = "/" + prefix;
+  }
 
   // if running locally,
   // these settings are ignored,
@@ -233,11 +247,13 @@ function register(
 
   const dynarest = Dynarest.init({
     accessKeyId,
+    autoCreate,
     debug,
     endpoint,
     key,
     region,
     secretAccessKey,
+    sessionToken,
     schema,
     table
   });
@@ -269,7 +285,7 @@ function register(
           if (debug) console.log("[dynarest] recv'd get request");
 
           const client = await dynarest;
-          if (debug) console.log("client:", client);
+          if (debug) console.log("client:", typeof client);
 
           const items = await client.get();
           if (debug) console.log("[dynarest] client.get() returned:", items);
@@ -326,6 +342,7 @@ function register(
           if (uuid) item.uuid = crypto.randomUUID();
           if (timestamp) item.timestamp = new Date().getTime();
 
+          if (debug) console.log("[dynarest] putting item:", item);
           await client.put(item);
 
           return res.status(200).json(item);
@@ -337,8 +354,19 @@ function register(
     }
   ];
 
+  // add options for each path
+  routes.push({
+    method: "options",
+    path: uniq(routes.map(({ path }) => path).flat()),
+    handler: async function (req, res) {
+      res.header("Access-Control-Allow-Methods", "GET,PUT,POST,DELETE,OPTIONS");
+      return res.status(200).send();
+    }
+  });
+
   routes.forEach(({ method, path, handler }) => {
     app[method](path, handler);
+    console.log(`[dynarest] registered "${path}"`);
   });
 }
 
