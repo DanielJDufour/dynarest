@@ -29,6 +29,7 @@ app.use(express.json());
 
 // register dynarest routes with the express app
 await register(app, {
+  autoCreate: false, // automatically create the table if it doesn't exist
   debug: false, // set to true for informational logging
   endpoint: 'http://localhost:9000', // useful if running DynamoDB locally
   key: "uuid", // Primary Hash Key for the DynamoDB Table
