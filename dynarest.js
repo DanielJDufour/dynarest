@@ -192,13 +192,26 @@ class Dynarest {
   }
 
   async put(obj) {
-    this.check(obj);
-    await this.document_client.send(
-      new PutCommand({
-        TableName: this.table,
-        Item: obj
-      })
-    );
+    if (Array.isArray(obj)) {
+      for (let i = 0; i < obj.length; i++) {
+        const item = obj[i];
+        this.check(item);
+        await this.document_client.send(
+          new PutCommand({
+            TableName: this.table,
+            Item: item
+          })
+        );
+      }
+    } else {
+      this.check(obj);
+      await this.document_client.send(
+        new PutCommand({
+          TableName: this.table,
+          Item: obj
+        })
+      );
+    }
   }
 
   validate(obj) {
@@ -338,14 +351,29 @@ function register(
         try {
           const client = await dynarest;
 
-          const item = { ...req.body };
-          if (uuid) item.uuid = crypto.randomUUID();
-          if (timestamp) item.timestamp = new Date().getTime();
+          const { body } = req;
 
-          if (debug) console.log("[dynarest] putting item:", item);
-          await client.put(item);
+          if (Array.isArray(body)) {
+            const items = body;
+            items.forEach(item => {
+              if (uuid) item.uuid = crypto.randomUUID();
+              if (timestamp) item.timestamp = new Date().getTime();
+            });
 
-          return res.status(200).json(item);
+            if (debug) console.log("[dynarest] putting items:", items);
+            await client.put(items);
+
+            return res.status(200).json(items);
+          } else {
+            const item = { ...body };
+            if (uuid) item.uuid = crypto.randomUUID();
+            if (timestamp) item.timestamp = new Date().getTime();
+
+            if (debug) console.log("[dynarest] putting item:", item);
+            await client.put(item);
+
+            return res.status(200).json(item);
+          }
         } catch (error) {
           console.log("[dynarest] error:", error);
           return res.status(500).json({ error: "put failed" });

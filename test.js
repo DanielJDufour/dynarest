@@ -1,7 +1,6 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 
-const fetch = require("cross-fetch");
 const express = require("express");
 const test = require("flug");
 
@@ -111,6 +110,13 @@ test("express", async ({ eq }) => {
 
       eq(await http.delete(table_url), "");
       eq(await http.get(table_url), []);
+
+      const abput = await http.put(table_url, [a, b]);
+      eq(
+        abput.map(it => it.title),
+        [aput.title, bput.title]
+      );
+      eq((await http.get(table_url)).length, 2);
 
       server.close();
       resolve();

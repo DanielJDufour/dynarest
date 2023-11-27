@@ -13,7 +13,7 @@ See an example below.
 | ------ | ----- | ---- | ----- |
 | GET | /prefix/table | /api/cars | gets an array of all the rows |
 | GET | /prefix/table/key | /api/cars/1234 | get a row by primary key |
-| PUT | /prefix/table | /api/cars | add a row and return it |
+| PUT | /prefix/table | /api/cars | add a row and return it, or add an array of rows and return them |
 | DELETE | /prefix/table | /api/cars | delete all rows |
 | DELETE | /prefix/table/key | /api/cars/key | delete row by primary key |
 
@@ -90,6 +90,9 @@ cars.put({
   model: "Versa",
   year: 2023
 });
+
+// add multiple items to the table
+cars.put([...])
 
 // get all items
 cars.get();
