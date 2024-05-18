@@ -1,6 +1,6 @@
 {
   "name": "dynarest",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Lightweight Restful API for DynamoDB",
   "main": "dynarest.js",
   "files": [
