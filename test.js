@@ -13,6 +13,13 @@ const EXPRESS_URL = `http://localhost:${EXPRESS_PORT}`;
 
 const schema = JSON.parse(fs.readFileSync("./test-data/schema.json", "utf-8"));
 
+const http = {
+  delete: url => fetch(url, { method: "DELETE" }).then(r => r.text()),
+  get: url => fetch(url).then(r => r.json()),
+  post: (url, params = {}) => fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "POST" }).then(r => r.json()),
+  put: (url, params = {}) => fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "PUT" }).then(r => r.json())
+};
+
 const a = {
   uuid: crypto.randomUUID(),
   time: "08:10",
@@ -77,13 +84,6 @@ test("express", async ({ eq }) => {
 
   return new Promise((resolve, reject) => {
     const server = app.listen(EXPRESS_PORT, async () => {
-      const http = {
-        delete: url => fetch(url, { method: "DELETE" }).then(r => r.text()),
-        get: url => fetch(url).then(r => r.json()),
-        put: (url, params = {}) =>
-          fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "PUT" }).then(r => r.json())
-      };
-
       const table_url = `${EXPRESS_URL}/api/${TABLE_NAME}`;
 
       eq(await http.delete(table_url), "");
@@ -128,6 +128,95 @@ test("express", async ({ eq }) => {
       const bclean = await http.put(table_url, { ...b, _private: "skip me" });
       eq((await http.get(table_url + "/" + bclean.uuid)).uuid, bclean.uuid);
       eq(await http.delete(table_url + "/" + bclean.uuid), "");
+
+      let err = "";
+      try {
+        await http.post(table_url, a);
+      } catch (error) {
+        err = error.toString();
+      }
+      eq(err.startsWith("SyntaxError"), true);
+
+      server.close();
+      resolve();
+    });
+  });
+});
+
+test("express with addMethod=POST", async ({ eq }) => {
+  const app = express();
+
+  app.use(express.json());
+
+  await register(app, {
+    addMethod: "POST",
+    autoCreate: true,
+    debug: false,
+    endpoint: ENDPOINT,
+    key: "uuid",
+    local: false,
+    region: "us-east-1",
+    schema,
+    ignoreProps: ["_private"],
+    table: TABLE_NAME,
+    timestamp: true,
+    uuid: true
+  });
+
+  return new Promise((resolve, reject) => {
+    const server = app.listen(EXPRESS_PORT, async () => {
+      const table_url = `${EXPRESS_URL}/api/${TABLE_NAME}`;
+
+      eq(await http.delete(table_url), "");
+      eq(await http.get(table_url), []);
+
+      const apost = await http.post(table_url, a);
+      eq(apost.title, a.title);
+
+      const bpost = await http.post(table_url, b);
+      eq(bpost.title, b.title);
+
+      const rows = await http.get(table_url + "?sort=timestamp");
+      eq(rows.length, 2);
+      eq(rows[0].timestamp < rows[1].timestamp, true);
+
+      const rows_reversed = await http.get(table_url + "?sort=-timestamp");
+      eq(rows_reversed.length, 2);
+      eq(rows_reversed[0].timestamp > rows_reversed[1].timestamp, true);
+
+      eq(await http.get(table_url + "/" + apost.uuid), apost);
+
+      eq(await http.delete(table_url + "/" + apost.uuid), "");
+
+      eq(await http.get(table_url), [bpost]);
+      eq(await http.get(table_url + "/" + bpost.uuid), bpost);
+
+      eq(await http.delete(table_url), "");
+      eq(await http.get(table_url), []);
+
+      const abpost = await http.post(table_url, [a, b]);
+      eq(
+        abpost.map(it => it.title),
+        [apost.title, bpost.title]
+      );
+      eq((await http.get(table_url)).length, 2);
+
+      // post obj with extra info
+      const aclean = await http.post(table_url, { ...a, _private: "skip me" });
+      eq((await http.get(table_url + "/" + aclean.uuid)).uuid, aclean.uuid);
+      eq(await http.delete(table_url + "/" + aclean), "");
+
+      const bclean = await http.post(table_url, { ...b, _private: "skip me" });
+      eq((await http.get(table_url + "/" + bclean.uuid)).uuid, bclean.uuid);
+      eq(await http.delete(table_url + "/" + bclean.uuid), "");
+
+      let err = "";
+      try {
+        await http.put(table_url, a);
+      } catch (error) {
+        err = error.toString();
+      }
+      eq(err.startsWith("SyntaxError"), true);
 
       server.close();
       resolve();

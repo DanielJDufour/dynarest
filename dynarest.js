@@ -252,6 +252,7 @@ function register(
   {
     accessKeyId = process.env.AWS_ACCESS_KEY_ID,
     autoCreate = false,
+    addMethod = "PUT",
     debug = false,
     endpoint = process.env.DYNAREST_ENDPOINT,
     local = false,
@@ -275,6 +276,10 @@ function register(
   if (!schema) throw new Error("[dynarest] missing schema");
   if (typeof prefix === "string" && prefix.length > 0 && !prefix.startsWith("/")) {
     prefix = "/" + prefix;
+  }
+
+  if (!["POST", "PUT", "post", "put", null, undefined].includes(addMethod)) {
+    throw new Error(`[dynarest] invalid addMethod.  should be "POST" or "PUT"`);
   }
 
   // if running locally,
@@ -378,7 +383,7 @@ function register(
       }
     },
     {
-      method: "put",
+      method: ["POST", "post"].includes(addMethod) ? "post" : "put",
       path: `${prefix}/${table}`,
       handler: async function (req, res) {
         try {

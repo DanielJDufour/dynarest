@@ -30,6 +30,7 @@ app.use(express.json());
 // register dynarest routes with the express app
 await register(app, {
   autoCreate: false, // automatically create the table if it doesn't exist
+  addMethod: "POST", // HTTP method for adding data. default is "PUT"
   debug: false, // set to true for informational logging
   endpoint: 'http://localhost:9000', // useful if running DynamoDB locally
   ignoreProps: ["_private"], // remove these properties from items before processing
