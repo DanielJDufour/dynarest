@@ -32,6 +32,7 @@ await register(app, {
   autoCreate: false, // automatically create the table if it doesn't exist
   debug: false, // set to true for informational logging
   endpoint: 'http://localhost:9000', // useful if running DynamoDB locally
+  ignoreProps: ["_private"], // remove these properties from items before processing
   key: "uuid", // Primary Hash Key for the DynamoDB Table
   local: false, // Optional, running DynamoDB locally
   prefix: 'api', // prefix to add before each route
@@ -57,6 +58,8 @@ const cars = await Dynarest.init({
 
   // Primary Key
   key: 'uuid',
+
+  ignoreProps: ["_private"], // optional
 
   region: 'us-east-1',
 

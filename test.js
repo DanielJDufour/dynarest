@@ -42,6 +42,7 @@ test("class", async ({ eq }) => {
   await dyna.delete();
 
   await dyna.put(a);
+
   await dyna.put(b);
 
   eq((await dyna.get()).map(({ uuid }) => uuid).sort(), [a.uuid, b.uuid].sort());
@@ -68,6 +69,7 @@ test("express", async ({ eq }) => {
     local: false,
     region: "us-east-1",
     schema,
+    ignoreProps: ["_private"],
     table: TABLE_NAME,
     timestamp: true,
     uuid: true
@@ -117,6 +119,15 @@ test("express", async ({ eq }) => {
         [aput.title, bput.title]
       );
       eq((await http.get(table_url)).length, 2);
+
+      // put obj with extra info
+      const aclean = await http.put(table_url, { ...a, _private: "skip me" });
+      eq((await http.get(table_url + "/" + aclean.uuid)).uuid, aclean.uuid);
+      eq(await http.delete(table_url + "/" + aclean), "");
+
+      const bclean = await http.put(table_url, { ...b, _private: "skip me" });
+      eq((await http.get(table_url + "/" + bclean.uuid)).uuid, bclean.uuid);
+      eq(await http.delete(table_url + "/" + bclean.uuid), "");
 
       server.close();
       resolve();

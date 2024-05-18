@@ -8,9 +8,11 @@
       "maxLength": 36
     },
     "time": { "type": "string", "pattern": "\\d\\d:\\d\\d" },
+    "timestamp": { "type": "number" },
     "title": { "type": "string", "maxLength": 50 },
     "year": { "type": "number" }
   },
+  "additionalProperties": false,
   "required": [
     "uuid",
     "title"

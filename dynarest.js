@@ -17,10 +17,11 @@ const uniq = arr => Array.from(new Set(arr)).sort();
 class Dynarest {
   ajv = null;
   client = null;
+  ignoreProps = [];
   schema = null;
   table = null;
 
-  constructor({ accessKeyId, ajv, base_client, client, debug, document_client, endpoint, key, region, schema, secretAccessKey, table }) {
+  constructor({ accessKeyId, ajv, base_client, client, debug, document_client, endpoint, ignoreProps, key, region, schema, secretAccessKey, table }) {
     this.ajv = ajv;
     this.base_client = base_client;
     this.client = client;
@@ -30,11 +31,25 @@ class Dynarest {
     this.key = key;
     this.region = region;
     this.schema = schema;
+    this.ignoreProps = ignoreProps || [];
     this.table = table;
     if (debug) console.log("[dynarest] finished constructor");
   }
 
-  static async init({ accessKeyId, autoCreate = false, debug, endpoint, key, region, secretAccessKey, sessionToken, schema, table, translateConfig }) {
+  static async init({
+    accessKeyId,
+    autoCreate = false,
+    debug,
+    endpoint,
+    ignoreProps,
+    key,
+    region,
+    secretAccessKey,
+    sessionToken,
+    schema,
+    table,
+    translateConfig
+  }) {
     if (debug) {
       console.log("[dynarest] initializing with:");
       console.dir(arguments[0], { depth: 10 });
@@ -114,16 +129,27 @@ class Dynarest {
       client,
       debug,
       document_client,
+      ignoreProps,
       key,
       schema,
       table
     });
   }
 
-  async check(obj) {
+  check(obj) {
     const [valid, errors] = this.validate(obj);
     if (this.debug) console.error(errors);
     if (!valid) throw Error("[dynarest] invalid object", { cause: errors });
+  }
+
+  clean(obj) {
+    const result = {};
+    for (const key in obj) {
+      if (this.ignoreProps.includes(key) === false) {
+        result[key] = obj[key];
+      }
+    }
+    return result;
   }
 
   async delete(hash) {
@@ -195,20 +221,22 @@ class Dynarest {
     if (Array.isArray(obj)) {
       for (let i = 0; i < obj.length; i++) {
         const item = obj[i];
-        this.check(item);
+        const cleaned_item = this.clean(item);
+        this.check(cleaned_item);
         await this.document_client.send(
           new PutCommand({
             TableName: this.table,
-            Item: item
+            Item: cleaned_item
           })
         );
       }
     } else {
-      this.check(obj);
+      const cleaned_obj = this.clean(obj);
+      this.check(cleaned_obj);
       await this.document_client.send(
         new PutCommand({
           TableName: this.table,
-          Item: obj
+          Item: cleaned_obj
         })
       );
     }
@@ -233,6 +261,7 @@ function register(
     secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY,
     sessionToken = process.env.AWS_SESSION_TOKEN,
     schema,
+    ignoreProps,
     table = process.env.DYNAREST_TABLE_NAME,
     timestamp = false,
     uuid = false
@@ -258,11 +287,15 @@ function register(
     table ??= "DYNAREST_TABLE";
   }
 
+  // clone schema to preserve immutability
+  schema = JSON.parse(JSON.stringify(schema));
+
   const dynarest = Dynarest.init({
     accessKeyId,
     autoCreate,
     debug,
     endpoint,
+    ignoreProps,
     key,
     region,
     secretAccessKey,
@@ -394,7 +427,7 @@ function register(
 
   routes.forEach(({ method, path, handler }) => {
     app[method](path, handler);
-    console.log(`[dynarest] registered "${path}"`);
+    console.log(`[dynarest] registered ${method.toUpperCase()} "${path}"`);
   });
 }
 
