@@ -12,6 +12,8 @@ const AJV_TYPE_TO_KEY_TYPE = {
   number: "N"
 };
 
+const pick = (obj, keys) => Object.fromEntries(keys.map(key => [key, obj[key]]));
+
 const uniq = arr => Array.from(new Set(arr)).sort();
 
 class Dynarest {
@@ -359,7 +361,7 @@ function register(
             }
           }
 
-          const filters = Object.entries(req.query).filter(([key, value]) => key !== "sort" && key !== "limit");
+          const filters = Object.entries(req.query).filter(([key, value]) => key !== "sort" && key !== "limit" && key !== "fields");
 
           filters.forEach(([key, value]) => {
             if (typeof value === "object" && value !== null) {
@@ -370,6 +372,11 @@ function register(
           if (filters.length >= 1) {
             // check if other params are valid keys
             items = items.filter(item => filters.every(([key, value]) => "" + item[key] === value));
+          }
+
+          if (req.query.fields) {
+            const fields = req.query.fields.split(",");
+            items = items.map(it => pick(it, fields));
           }
 
           return res.status(200).json(items);

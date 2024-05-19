@@ -135,6 +135,13 @@ cars.delete("9d22081f-47f2-433c-87af-2ebe936b4f87");
 ```
 
 ## advanced features
+### fields
+You can return only specific fields (aka attributes)
+```js
+// only return the uuid and year of the cars
+fetch("/api/cars?fields=uuid,year");
+```
+
 ### filtering
 You can also filter by certain params
 ```js

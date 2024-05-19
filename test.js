@@ -114,6 +114,12 @@ test("express", async ({ eq }) => {
       eq(await http.get(table_url + "?sort=year&time=08%3A10"), [aput, bput]);
       eq(await http.get(table_url + "?title=test%20title"), [aput]);
 
+      // check fields
+      eq(await http.get(table_url + "?sort=-year&fields=uuid,year"), [
+        { uuid: bput.uuid, year: bput.year },
+        { uuid: aput.uuid, year: aput.year }
+      ]);
+
       eq(await http.get(table_url + "/" + aput.uuid), aput);
 
       eq(await http.delete(table_url + "/" + aput.uuid), "");
