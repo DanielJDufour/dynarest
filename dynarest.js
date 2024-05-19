@@ -359,6 +359,19 @@ function register(
             }
           }
 
+          const filters = Object.entries(req.query).filter(([key, value]) => key !== "sort" && key !== "limit");
+
+          filters.forEach(([key, value]) => {
+            if (typeof value === "object" && value !== null) {
+              throw new Error("[dynarest] invalid filter value");
+            }
+          });
+
+          if (filters.length >= 1) {
+            // check if other params are valid keys
+            items = items.filter(item => filters.every(([key, value]) => "" + item[key] === value));
+          }
+
           return res.status(200).json(items);
         } catch (error) {
           console.log(error);

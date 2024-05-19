@@ -135,11 +135,18 @@ cars.delete("9d22081f-47f2-433c-87af-2ebe936b4f87");
 ```
 
 ## advanced features
+### filtering
+You can also filter by certain params
+```js
+// only return cards made by Toyota in 2023
+fetch("/api/cars?year=2023&make=Toyota");
+```
+
 ### limiting
 You can also limit your results with the limit param.  This is applied after filtering and sorting.
 ```js
 // only return 10 cars
-fetch("/api/cars?limit=10")
+fetch("/api/cars?limit=10");
 ```
 
 ### sorting
