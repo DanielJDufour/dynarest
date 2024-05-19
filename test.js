@@ -95,6 +95,11 @@ test("express", async ({ eq }) => {
       const bput = await http.put(table_url, b);
       eq(bput.title, b.title);
 
+      // limit response
+      const rows_limited = await http.get(table_url + "?sort=timestamp&limit=1");
+      eq(rows_limited.length, 1);
+      eq(rows_limited, [aput]);
+
       const rows = await http.get(table_url + "?sort=timestamp");
       eq(rows.length, 2);
       eq(rows[0].timestamp < rows[1].timestamp, true);

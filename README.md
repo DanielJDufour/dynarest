@@ -133,3 +133,20 @@ cars.delete();
 // delete item by primary key
 cars.delete("9d22081f-47f2-433c-87af-2ebe936b4f87");
 ```
+
+## advanced features
+### limiting
+You can also limit your results with the limit param.  This is applied after filtering and sorting.
+```js
+// only return 10 cars
+fetch("/api/cars?limit=10")
+```
+
+### sorting
+You can pass a sort parameter to your GET request to sort your results.
+```js
+fetch("/api/cars?sort=year");
+
+// reverse the sort by adding a "-" in front of the value
+fetch("/api/cars?sort=-year");
+```

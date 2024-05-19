@@ -338,7 +338,7 @@ function register(
           const client = await dynarest;
           if (debug) console.log("client:", typeof client);
 
-          const items = await client.get();
+          let items = await client.get();
           if (debug) console.log("[dynarest] client.get() returned:", items);
 
           if (req.query.sort) {
@@ -349,6 +349,13 @@ function register(
               items.sort((a, b) => (Number(a[sort_key]) > Number(b[sort_key]) ? -1 : 1));
             } else {
               items.sort((a, b) => (Number(a[sort_key]) > Number(b[sort_key]) ? 1 : -1));
+            }
+          }
+
+          if (req.query.limit) {
+            const limit = Number(req.query.limit);
+            if (limit === Number(limit) && limit !== Infinity && limit !== -Infinity) {
+              items = items.slice(0, limit);
             }
           }
 
