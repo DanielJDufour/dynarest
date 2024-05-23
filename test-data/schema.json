@@ -10,7 +10,8 @@
     "time": { "type": "string", "pattern": "\\d\\d:\\d\\d" },
     "timestamp": { "type": "number" },
     "title": { "type": "string", "maxLength": 50 },
-    "year": { "type": "number" }
+    "year": { "type": "number" },
+    "expireAt": { "type": "number" }
   },
   "additionalProperties": false,
   "required": [

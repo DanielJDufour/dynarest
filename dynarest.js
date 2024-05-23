@@ -50,7 +50,8 @@ class Dynarest {
     sessionToken,
     schema,
     table,
-    translateConfig
+    translateConfig,
+    ttlAttribute = "expireAt"
   }) {
     if (debug) {
       console.log("[dynarest] initializing with:");
@@ -103,24 +104,38 @@ class Dynarest {
       if (!tables.includes(table)) {
         if (debug) console.log("[dynarest] creating table");
         await new Promise((resolve, reject) => {
-          base_client.createTable(
-            {
-              AttributeDefinitions: [
-                {
-                  AttributeName: key,
-                  AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
-                }
-              ],
-              KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
-              ProvisionedThroughput: {
-                ReadCapacityUnits: 5,
-                WriteCapacityUnits: 5
-              },
-              TableName: table
+          const createTableOptions = {
+            AttributeDefinitions: [
+              {
+                AttributeName: key,
+                AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
+              }
+            ],
+            KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
+            ProvisionedThroughput: {
+              ReadCapacityUnits: 5,
+              WriteCapacityUnits: 5
             },
-            (err, data) => (err ? reject(err) : resolve(data))
-          );
+            TableName: table
+          };
+          if (debug) console.log("[dynarest] createTableOptions:", createTableOptions);
+          base_client.createTable(createTableOptions, (err, data) => (err ? reject(err) : resolve(data)));
         });
+
+        if (ttlAttribute) {
+          await new Promise((resolve, reject) => {
+            base_client.updateTimeToLive(
+              {
+                TableName: table,
+                TimeToLiveSpecification: {
+                  Enabled: true,
+                  AttributeName: ttlAttribute
+                }
+              },
+              (err, data) => (err ? reject(err) : resolve(data))
+            );
+          });
+        }
       }
     }
 
@@ -140,8 +155,8 @@ class Dynarest {
 
   check(obj) {
     const [valid, errors] = this.validate(obj);
-    if (this.debug) console.error(errors);
-    if (!valid) throw Error("[dynarest] invalid object", { cause: errors });
+    if (this.debug) console.error(JSON.stringify(errors[0]));
+    if (!valid) throw Error("[dynarest] invalid object", { cause: errors.length === 1 ? errors[0] : errors });
   }
 
   clean(obj) {
@@ -267,6 +282,8 @@ function register(
     ignoreProps,
     table = process.env.DYNAREST_TABLE_NAME,
     timestamp = false,
+    ttl = Infinity, // how many seconds items should live for
+    ttlAttribute = "expireAt",
     uuid = false
   }
 ) {
@@ -308,7 +325,8 @@ function register(
     secretAccessKey,
     sessionToken,
     schema,
-    table
+    table,
+    ttlAttribute: typeof ttl === "number" && ttl !== Infinity && ttl >= 1 && ttlAttribute
   });
 
   const routes = [
@@ -423,6 +441,7 @@ function register(
             items.forEach(item => {
               if (uuid) item.uuid = crypto.randomUUID();
               if (timestamp) item.timestamp = new Date().getTime();
+              if (typeof ttl === "number" && ttl !== Infinity && ttl >= 1) item[ttlAttribute] = Math.ceil((new Date().getTime() + ttl * 1000) / 1000);
             });
 
             if (debug) console.log("[dynarest] putting items:", items);
@@ -433,6 +452,7 @@ function register(
             const item = { ...body };
             if (uuid) item.uuid = crypto.randomUUID();
             if (timestamp) item.timestamp = new Date().getTime();
+            if (typeof ttl === "number" && ttl !== Infinity && ttl >= 1) item[ttlAttribute] = Math.ceil((new Date().getTime() + ttl * 1000) / 1000);
 
             if (debug) console.log("[dynarest] putting item:", item);
             await client.put(item);

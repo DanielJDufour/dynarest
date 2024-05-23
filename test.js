@@ -6,8 +6,10 @@ const test = require("flug");
 
 const { Dynarest, register } = require("./dynarest.js");
 
+const sleep_seconds = s => new Promise(resolve => setTimeout(resolve, s * 1000));
+
 const ENDPOINT = "http://localhost:9000";
-const TABLE_NAME = "TABLE_NAME";
+const TABLE_NAME = "RANDOM-TABLE-NAME-" + crypto.randomUUID();
 const EXPRESS_PORT = 9001;
 const EXPRESS_URL = `http://localhost:${EXPRESS_PORT}`;
 
@@ -17,7 +19,11 @@ const http = {
   delete: url => fetch(url, { method: "DELETE" }).then(r => r.text()),
   get: url => fetch(url).then(r => r.json()),
   post: (url, params = {}) => fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "POST" }).then(r => r.json()),
-  put: (url, params = {}) => fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "PUT" }).then(r => r.json())
+  put: async (url, params = {}) => {
+    const res = await fetch(url, { body: JSON.stringify(params), headers: { "Content-Type": "application/json" }, method: "PUT" });
+    const data = await res.json();
+    return data;
+  }
 };
 
 const a = {
@@ -160,7 +166,7 @@ test("express", async ({ eq }) => {
   });
 });
 
-test("express with addMethod=POST", async ({ eq }) => {
+test("express with addMethod=POST ttlAttribute=expireAt ttl=2", async ({ eq }) => {
   const app = express();
 
   app.use(express.json());
@@ -177,6 +183,8 @@ test("express with addMethod=POST", async ({ eq }) => {
     ignoreProps: ["_private"],
     table: TABLE_NAME,
     timestamp: true,
+    ttl: 2,
+    ttlAttribute: "expireAt",
     uuid: true
   });
 
@@ -189,6 +197,7 @@ test("express with addMethod=POST", async ({ eq }) => {
 
       const apost = await http.post(table_url, a);
       eq(apost.title, a.title);
+      eq(typeof apost.expireAt, "number");
 
       const bpost = await http.post(table_url, b);
       eq(bpost.title, b.title);
