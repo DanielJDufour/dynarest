@@ -20,7 +20,7 @@ See an example below.
 ## Routing
 ```js
 const express = require("express");
-const { register } = require("./dynarest.js");
+const { register } = require("dynarest");
 
 const app = express();
 

@@ -1,9 +1,8 @@
 const crypto = require("node:crypto");
 
-const AWS = require("aws-sdk");
 const Ajv = require("ajv");
 
-const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBClient, CreateTableCommand, UpdateTimeToLiveCommand, paginateListTables } = require("@aws-sdk/client-dynamodb");
 
 const { DeleteCommand, DynamoDBDocumentClient, GetCommand, PutCommand, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 
@@ -16,6 +15,20 @@ const pick = (obj, keys) => Object.fromEntries(keys.map(key => [key, obj[key]]))
 
 const uniq = arr => Array.from(new Set(arr)).sort();
 
+const getAllTableNamesWithPaginator = async client => {
+  let allTableNames = [];
+
+  const paginator = paginateListTables({ client }, {});
+
+  for await (const page of paginator) {
+    if (page.TableNames) {
+      allTableNames = allTableNames.concat(page.TableNames);
+    }
+  }
+
+  return allTableNames;
+};
+
 class Dynarest {
   ajv = null;
   client = null;
@@ -23,9 +36,8 @@ class Dynarest {
   schema = null;
   table = null;
 
-  constructor({ accessKeyId, ajv, base_client, client, debug, document_client, endpoint, ignoreProps, key, region, schema, secretAccessKey, table }) {
+  constructor({ accessKeyId, ajv, client, debug, document_client, endpoint, ignoreProps, key, region, schema, secretAccessKey, table }) {
     this.ajv = ajv;
-    this.base_client = base_client;
     this.client = client;
     this.debug = debug;
     this.document_client = document_client;
@@ -60,15 +72,6 @@ class Dynarest {
 
     if (!table) throw Error("[dynarest] table missing");
 
-    const base_client = new AWS.DynamoDB({
-      accessKeyId,
-      endpoint,
-      region,
-      secretAccessKey,
-      sessionToken
-    });
-    if (debug) console.log("[dynarest] base_client:", typeof base_client);
-
     const client = new DynamoDBClient({
       endpoint,
       region
@@ -88,53 +91,39 @@ class Dynarest {
     if (debug) console.log("[dynarest] attribute_definitions:", attribute_definitions);
 
     if (autoCreate) {
-      const tables = await new Promise((resolve, reject) => {
-        base_client.listTables({}, (err, data) => {
-          if (debug) console.log("[dynarest] listTables:", { err, data });
-          if (err) {
-            console.error("failed to list tables");
-            reject(err);
-          } else {
-            resolve(data.TableNames);
-          }
-        });
-      });
+      const tables = await getAllTableNamesWithPaginator(client);
       if (debug) console.log("[dynarest] tables:", tables);
 
       if (!tables.includes(table)) {
         if (debug) console.log("[dynarest] creating table");
-        await new Promise((resolve, reject) => {
-          const createTableOptions = {
-            AttributeDefinitions: [
-              {
-                AttributeName: key,
-                AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
-              }
-            ],
-            KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
-            ProvisionedThroughput: {
-              ReadCapacityUnits: 5,
-              WriteCapacityUnits: 5
-            },
-            TableName: table
-          };
-          if (debug) console.log("[dynarest] createTableOptions:", createTableOptions);
-          base_client.createTable(createTableOptions, (err, data) => (err ? reject(err) : resolve(data)));
-        });
+        const createTableOptions = {
+          AttributeDefinitions: [
+            {
+              AttributeName: key,
+              AttributeType: AJV_TYPE_TO_KEY_TYPE[schema.properties[key].type]
+            }
+          ],
+          KeySchema: [{ AttributeName: key, KeyType: "HASH" }],
+          ProvisionedThroughput: {
+            ReadCapacityUnits: 5,
+            WriteCapacityUnits: 5
+          },
+          TableName: table
+        };
+        if (debug) console.log("[dynarest] createTableOptions:", createTableOptions);
+        const createTableCommand = new CreateTableCommand(createTableOptions);
+        await client.send(createTableCommand);
 
         if (ttlAttribute) {
-          await new Promise((resolve, reject) => {
-            base_client.updateTimeToLive(
-              {
-                TableName: table,
-                TimeToLiveSpecification: {
-                  Enabled: true,
-                  AttributeName: ttlAttribute
-                }
-              },
-              (err, data) => (err ? reject(err) : resolve(data))
-            );
-          });
+          const ttlOptions = {
+            TableName: table,
+            TimeToLiveSpecification: {
+              Enabled: true,
+              AttributeName: ttlAttribute
+            }
+          };
+          const ttlCommand = new UpdateTimeToLiveCommand(ttlOptions);
+          await client.send(ttlCommand);
         }
       }
     }
@@ -142,7 +131,6 @@ class Dynarest {
     return new Dynarest({
       ajv: new Ajv(),
       attribute_definitions,
-      base_client,
       client,
       debug,
       document_client,
@@ -155,7 +143,7 @@ class Dynarest {
 
   check(obj) {
     const [valid, errors] = this.validate(obj);
-    if (this.debug) console.error(JSON.stringify(errors[0]));
+    if (this.debug) console.error(JSON.stringify(errors));
     if (!valid) throw Error("[dynarest] invalid object", { cause: errors.length === 1 ? errors[0] : errors });
   }
 
@@ -270,6 +258,7 @@ function register(
     accessKeyId = process.env.AWS_ACCESS_KEY_ID,
     autoCreate = false,
     addMethod = "PUT",
+    alwaysOkay = false,
     debug = false,
     endpoint = process.env.DYNAREST_ENDPOINT,
     local = false,
@@ -344,7 +333,7 @@ function register(
           return res.status(200).send();
         } catch (error) {
           console.error(error);
-          return res.status(500).json(process.env.mode === "development" ? JSON.stringify({ msg: err.message }) : "error");
+          return res.status(alwaysOkay ? 200 : 500).json(process.env.mode === "development" ? JSON.stringify({ msg: err.message }) : "error");
         }
       }
     },
@@ -400,7 +389,7 @@ function register(
           return res.status(200).json(items);
         } catch (error) {
           console.log(error);
-          return res.status(500).json({ error: "Could not retreive from table " + table });
+          return res.status(alwaysOkay ? 200 : 500).json({ error: "Could not retreive from table " + table });
         }
       }
     },
@@ -423,7 +412,7 @@ function register(
           return res.status(200).json(item);
         } catch (error) {
           console.log(error);
-          return res.status(500).json({ error: "Could not retreive from table " + table });
+          return res.status(alwaysOkay ? 200 : 500).json({ error: "Could not retreive from table " + table });
         }
       }
     },
@@ -456,12 +445,13 @@ function register(
 
             if (debug) console.log("[dynarest] putting item:", item);
             await client.put(item);
+            if (debug) console.log("[dynarest] finishing putting item");
 
             return res.status(200).json(item);
           }
         } catch (error) {
           console.log("[dynarest] error:", error);
-          return res.status(500).json({ error: "put failed" });
+          return res.status(alwaysOkay ? 200 : 500).json({ error: "put failed" });
         }
       }
     }
