@@ -29,13 +29,12 @@
   },
   "homepage": "https://github.com/DanielJDufour/dynarest#readme",
   "devDependencies": {
-    "aws-sdk": "^2.1502.0",
-    "express": "^4.18.2",
-    "flug": "^2.6.0"
+    "express": "^5.1.0",
+    "flug": "^2.8.2"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.454.0",
-    "@aws-sdk/lib-dynamodb": "^3.454.0",
-    "ajv": "^8.12.0"
+    "@aws-sdk/client-dynamodb": "^3.940.0",
+    "@aws-sdk/lib-dynamodb": "^3.940.0",
+    "ajv": "^8.17.1"
   }
 }
