@@ -108,3 +108,6 @@ local/
 
 # Lock files
 pnpm-lock.yaml
+
+# other files
+package-lock.json
