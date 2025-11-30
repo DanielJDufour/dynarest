@@ -271,6 +271,7 @@ function register(
     ignoreProps,
     table = process.env.DYNAREST_TABLE_NAME,
     timestamp = false,
+    timestampAttribute = "timestamp",
     ttl = Infinity, // how many seconds items should live for
     ttlAttribute = "expireAt",
     uuid = false
@@ -429,7 +430,7 @@ function register(
             const items = body;
             items.forEach(item => {
               if (uuid) item.uuid = crypto.randomUUID();
-              if (timestamp) item.timestamp = new Date().getTime();
+              if (timestamp) item[timestampAttribute] = new Date().getTime();
               if (typeof ttl === "number" && ttl !== Infinity && ttl >= 1) item[ttlAttribute] = Math.ceil((new Date().getTime() + ttl * 1000) / 1000);
             });
 
@@ -440,7 +441,7 @@ function register(
           } else {
             const item = { ...body };
             if (uuid) item.uuid = crypto.randomUUID();
-            if (timestamp) item.timestamp = new Date().getTime();
+            if (timestamp) item[timestampAttribute] = new Date().getTime();
             if (typeof ttl === "number" && ttl !== Infinity && ttl >= 1) item[ttlAttribute] = Math.ceil((new Date().getTime() + ttl * 1000) / 1000);
 
             if (debug) console.log("[dynarest] putting item:", item);

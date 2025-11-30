@@ -41,6 +41,7 @@ await register(app, {
   schema, // Ajv Schema for items in DynamoDB table, see https://ajv.js.org/
   table: 'cars', // the name of the database table (will be created if missing)
   timestamp: true, // add a timestamp attribute to each item when created
+  timestampAttribute: "receivedAt", // name of timestamp attribute, default is "timestamp"
   ttl: 240, // how many seconds new items should live for
   ttlAttribute: "expireAt" // name of attribute to add if ttl is set
   uuid: true // add a uuid attribute to each item when created
