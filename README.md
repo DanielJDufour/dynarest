@@ -36,6 +36,7 @@ await register(app, {
   ignoreProps: ["_private"], // remove these properties from items before processing
   key: "uuid", // Primary Hash Key for the DynamoDB Table
   local: false, // Optional, running DynamoDB locally
+  methods: ["POST"], // Optional, allow only specific methods
   prefix: 'api', // prefix to add before each route
   region: "us-east-1",
   schema, // Ajv Schema for items in DynamoDB table, see https://ajv.js.org/

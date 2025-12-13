@@ -261,8 +261,9 @@ function register(
     alwaysOkay = false,
     debug = false,
     endpoint = process.env.DYNAREST_ENDPOINT,
-    local = false,
     key,
+    local = false,
+    methods = undefined,
     prefix = `/api`,
     region = process.env.AWS_REGION,
     secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY,
@@ -285,6 +286,10 @@ function register(
   if (!schema) throw new Error("[dynarest] missing schema");
   if (typeof prefix === "string" && prefix.length > 0 && !prefix.startsWith("/")) {
     prefix = "/" + prefix;
+  }
+
+  if (!methods) {
+    methods = ["DELETE", "GET", "OPTIONS", "POST", "PUT"];
   }
 
   if (!["POST", "PUT", "post", "put", null, undefined].includes(addMethod)) {
@@ -469,8 +474,10 @@ function register(
   });
 
   routes.forEach(({ method, path, handler }) => {
-    app[method](path, handler);
-    console.log(`[dynarest] registered ${method.toUpperCase()} "${path}"`);
+    if (methods.includes(method.toUpperCase())) {
+      app[method](path, handler);
+      console.log(`[dynarest] registered ${method.toUpperCase()} "${path}"`);
+    }
   });
 }
 
